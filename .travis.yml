@@ -1,0 +1,44 @@
+# need super user permissions to execute the build
+sudo: required
+
+# need a copy of docker ready to go
+services:
+  - docker
+
+# series of steps that needs to occur before deploying the project or running the tests
+before_install:
+  # tag the image while building
+  - docker build -t deshetti/react-test -f ./client/Dockerfile.dev ./client
+
+# series of commands for the tests to be executed
+script:
+  # command to run the test and exit. -- --coverage shows the test results and exit
+  - docker run deshetti/react-test npm run test -- --coverage
+
+after_success:
+  - docker build -t deshetti/multi-client ./client
+  - docker build -t deshetti/multi-nginx ./nginx
+  - docker build -t deshetti/multi-server ./server
+  - docker build -t deshetti/multi-worker ./worker
+  # login to docker cli
+  - echo "$DOCKER_PASSOWRD" | docker login -u "$DOCKER_ID" --password-stdin
+  #Take those images and push it to docker hub
+  - docker push deshetti/multi-client
+  - docker push deshetti/multi-nginx
+  - docker push deshetti/multi-server
+  - docker push deshetti/multi-worker
+
+
+# deploy it on AWS
+deploy:
+  provider: elasticbeanstalk
+  region: "ap-south-1"
+  app: "docker-react"
+  env: "DockerReact-env"
+  bucket_name: "elasticbeanstalk-ap-south-1-663552934898"
+  bucket_path: "docker-react"
+  on:
+    branch: master
+  access_key_id: $AWS_ACCESS_KEY
+  secret_access_key:
+    secure: "$AWS_SECRET_KEY"
